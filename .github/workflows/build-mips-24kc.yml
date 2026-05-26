@@ -21,21 +21,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Cache
+      - name: Setup SDK Cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.CACHE_DIR }}
-          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:v2:${{ github.run_number }}
+          path: ~/cache
+          key: ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-sdk-v3-${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:v2:
+            ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-sdk-v3-
 
       - name: Setup CCache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:v2:${{ github.run_number }}
+          key: ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-ccache-v3-${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:v2:
+            ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-ccache-v3-
 
       - name: Install Dependencies
         run: |
@@ -68,26 +68,57 @@ jobs:
           sdk_home="$(mktemp -d)"
           mkdir -p ~/.ccache
           ln -sf ~/.ccache "$sdk_home/.ccache"
-          echo "SDK_HOME=$sdk_home" >> $GITHUB_ENV
-          echo "CONFIG_CCACHE=y" >> $GITHUB_ENV
+
+          echo "SDK_HOME=$sdk_home" >> "$GITHUB_ENV"
+          echo "CONFIG_CCACHE=y" >> "$GITHUB_ENV"
+
+          echo "SDK_HOME=$sdk_home"
 
       - name: Patch compile.sh for tar.zst SDK
         run: |
+          echo "Before patch:"
+          grep -n "xz\|zstd\|tar" compile.sh || true
+
+          # 兼容不同写法：
+          # xz -d -c xxx | tar ...
+          # xz -d xxx | tar ...
+          # xzcat xxx | tar ...
           sed -i 's/xz -d -c/zstd -d -c/g' compile.sh
-          grep -n "zstd -d -c\|xz -d -c" compile.sh || true
+          sed -i 's/xz -dc/zstd -dc/g' compile.sh
+          sed -i 's/xz -d/zstd -d/g' compile.sh
+          sed -i 's/xzcat/zstdcat/g' compile.sh
+
+          echo "After patch:"
+          grep -n "xz\|zstd\|tar" compile.sh || true
+
+          if grep -q "xz" compile.sh; then
+            echo "ERROR: compile.sh still contains xz, please check compile.sh manually."
+            exit 1
+          fi
 
       - name: Build package
         run: |
           sh compile.sh
 
       - name: Show output
+        if: always()
         run: |
+          echo "Current directory:"
+          pwd
+
+          echo "IPK in current directory:"
           ls -lh *.ipk || true
-          find . -name "*.ipk" -type f
+
+          echo "Find all IPK:"
+          find . -name "*.ipk" -type f -print || true
+
+          echo "Find SDK output IPK:"
+          find "$SDK_HOME" -name "*.ipk" -type f -print || true
 
       - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
           name: v2ray-core-mips_24kc
-          path: "*.ipk"
+          path: |
+            *.ipk
           retention-days: 7
