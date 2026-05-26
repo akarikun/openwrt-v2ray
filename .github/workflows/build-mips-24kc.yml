@@ -1,0 +1,86 @@
+name: Build mips_24kc
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      ARCH: mips_24kc
+      SDK_URL_PATH: https://downloads.openwrt.org/snapshots/targets/ath79/generic
+      SDK_NAME: -sdk-ath79-generic_
+      CACHE_DIR: ~/cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:${{ github.run_number }}
+          restore-keys: |
+            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:
+
+      - name: Setup CCache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:${{ github.run_number }}
+          restore-keys: |
+            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -yq \
+            build-essential \
+            clang \
+            flex \
+            bison \
+            g++ \
+            gawk \
+            gcc-multilib \
+            g++-multilib \
+            gettext \
+            git \
+            libncurses5-dev \
+            libssl-dev \
+            python3 \
+            python3-distutils \
+            rsync \
+            unzip \
+            wget \
+            file \
+            zstd \
+            xsltproc
+
+      - name: Prepare For Build
+        run: |
+          sdk_home="$(mktemp -d)"
+          mkdir -p ~/.ccache
+          ln -sf ~/.ccache "$sdk_home/.ccache"
+          echo "SDK_HOME=$sdk_home" >> $GITHUB_ENV
+          echo "CONFIG_CCACHE=y" >> $GITHUB_ENV
+
+      - name: Build package
+        run: |
+          sh compile.sh
+
+      - name: Show output
+        run: |
+          ls -lh *.ipk || true
+
+      - name: Upload IPK
+        uses: actions/upload-artifact@v4
+        with:
+          name: v2ray-core-mips_24kc
+          path: "*.ipk"
+          retention-days: 7
