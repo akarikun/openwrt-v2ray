@@ -25,17 +25,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CACHE_DIR }}
-          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:${{ github.run_number }}
+          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:v2:${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:
+            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:cache:v2:
 
       - name: Setup CCache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:${{ github.run_number }}
+          key: ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:v2:${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:
+            ${{ runner.os }}:openwrt-v2ray:${{ env.ARCH }}:ccache:v2:
 
       - name: Install Dependencies
         run: |
@@ -60,7 +60,8 @@ jobs:
             wget \
             file \
             zstd \
-            xsltproc
+            xsltproc \
+            ca-certificates
 
       - name: Prepare For Build
         run: |
@@ -70,6 +71,11 @@ jobs:
           echo "SDK_HOME=$sdk_home" >> $GITHUB_ENV
           echo "CONFIG_CCACHE=y" >> $GITHUB_ENV
 
+      - name: Patch compile.sh for tar.zst SDK
+        run: |
+          sed -i 's/xz -d -c/zstd -d -c/g' compile.sh
+          grep -n "zstd -d -c\|xz -d -c" compile.sh || true
+
       - name: Build package
         run: |
           sh compile.sh
@@ -77,6 +83,7 @@ jobs:
       - name: Show output
         run: |
           ls -lh *.ipk || true
+          find . -name "*.ipk" -type f
 
       - name: Upload IPK
         uses: actions/upload-artifact@v4
