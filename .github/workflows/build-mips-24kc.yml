@@ -2,10 +2,6 @@ name: Build mips_24kc
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
-      - main
 
 jobs:
   build:
@@ -94,25 +90,27 @@ jobs:
         run: |
           sh compile.sh
 
-      - name: Show output
+      - name: Collect IPK
         if: always()
         run: |
-          echo "Current directory:"
-          pwd
-
-          echo "IPK in current directory:"
-          ls -lh *.ipk || true
+          mkdir -p artifacts
 
           echo "Find all IPK:"
-          find . -name "*.ipk" -type f -print || true
+          find . "$SDK_HOME" -name "*.ipk" -type f -print || true
 
-          echo "Find SDK output IPK:"
-          find "$SDK_HOME" -name "*.ipk" -type f -print || true
+          find . "$SDK_HOME" -name "v2ray*.ipk" -type f -exec cp -v {} artifacts/ \; || true
+
+          echo "Artifacts:"
+          ls -lh artifacts || true
+
+          if [ -z "$(ls -A artifacts 2>/dev/null)" ]; then
+            echo "ERROR: No IPK files found."
+            exit 1
+          fi
 
       - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
           name: v2ray-core-mips_24kc
-          path: |
-            *.ipk
+          path: artifacts/*.ipk
           retention-days: 7
