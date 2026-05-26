@@ -25,17 +25,17 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/cache
-          key: ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-sdk-v3-${{ github.run_number }}
+          key: ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-sdk-v4-${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-sdk-v3-
+            ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-sdk-v4-
 
       - name: Setup CCache
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-ccache-v3-${{ github.run_number }}
+          key: ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-ccache-v4-${{ github.run_number }}
           restore-keys: |
-            ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-ccache-v3-
+            ${{ runner.os }}-openwrt-v2ray-${{ env.ARCH }}-ccache-v4-
 
       - name: Install Dependencies
         run: |
@@ -58,6 +58,7 @@ jobs:
             rsync \
             unzip \
             wget \
+            curl \
             file \
             zstd \
             xsltproc \
@@ -77,22 +78,15 @@ jobs:
       - name: Patch compile.sh for tar.zst SDK
         run: |
           echo "Before patch:"
-          grep -n "xz\|zstd\|tar" compile.sh || true
+          grep -n "tar -Jxf\|tar --zstd\|xz -d\|xzcat" compile.sh || true
 
-          # 兼容不同写法：
-          # xz -d -c xxx | tar ...
-          # xz -d xxx | tar ...
-          # xzcat xxx | tar ...
-          sed -i 's/xz -d -c/zstd -d -c/g' compile.sh
-          sed -i 's/xz -dc/zstd -dc/g' compile.sh
-          sed -i 's/xz -d/zstd -d/g' compile.sh
-          sed -i 's/xzcat/zstdcat/g' compile.sh
+          sed -i 's|tar -Jxf "$sdk_dir/$sdk_file" -C "$sdk_home_dir" --strip=1|tar --zstd -xf "$sdk_dir/$sdk_file" -C "$sdk_home_dir" --strip=1|g' compile.sh
 
           echo "After patch:"
-          grep -n "xz\|zstd\|tar" compile.sh || true
+          grep -n "tar -Jxf\|tar --zstd\|xz -d\|xzcat" compile.sh || true
 
-          if grep -q "xz" compile.sh; then
-            echo "ERROR: compile.sh still contains xz, please check compile.sh manually."
+          if grep -q "tar -Jxf\|xz -d\|xzcat" compile.sh; then
+            echo "ERROR: compile.sh still contains SDK xz extraction command."
             exit 1
           fi
 
